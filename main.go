@@ -24,7 +24,7 @@ func main() {
 	// Initialize Gin router
 	controllers := controller.NewHandler()
 	// Routes for CRUD
-	r.POST("/customers", controllers.CreateCustomer)
+	r.POST("/upload", controllers.CreateCustomer)
 	r.GET("/customers", controllers.ListCustomers)
 	r.PUT("/customers/:id", controllers.EditCustomer)
 	r.DELETE("/customers/:id", controllers.DeleteCustomer)
