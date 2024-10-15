@@ -4,6 +4,7 @@ import (
 	"crm-backend/config"
 	h "crm-backend/helper"
 	httpresponse "crm-backend/helper/httpResponse"
+	"crm-backend/internals/dto"
 	"crm-backend/models"
 	"crm-backend/services"
 	"strconv"
@@ -16,37 +17,47 @@ import (
 )
 
 type customerHandler struct {
-	cfg *config.Config
 }
 
 func NewHandler() *customerHandler {
-	return &customerHandler{cfg: &config.Config{}}
+	return &customerHandler{}
 }
 
-// ListCustomers fetches customers, first checking Redis
 func (ch *customerHandler) ListCustomers(c *gin.Context) {
-	config := config.ConnectDB()
-	db := config.DB
-
-	customers, err := services.GetAllCustomersFromCache(db, config.Redis)
+	dbConfig := config.ConnectDB()
+	db := dbConfig.DB
+	logger := config.GetLoggerInstance()
+	customers, err := services.GetAllCustomersFromCache(db, dbConfig.Redis)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch customers"})
-		return
-	}
-	c.JSON(http.StatusOK, customers)
-}
-
-func (ch *customerHandler) CreateCustomer(c *gin.Context) {
-	config := config.ConnectDB()
-	file, err := c.FormFile("file")
-	if err != nil {
-		res := httpresponse.PrepareResponse(h.FileFormateInvalidError, h.FileRetrieveFromFormDataError)
+		logger.Log(h.CustomerFetchError, err.Error(), h.CustomerFetchErrorCode)
+		res := httpresponse.PrepareResponse(h.CustomerFetchErrorCode, h.CustomerFetchError)
 		h.RespondWithError(c, http.StatusBadRequest, res)
 		return
 	}
 
-	// Validate file type (must be .xlsx)
+	logger.Log(h.CustomerFetchSuccess, "", h.APISuccessCode)
+	res := httpresponse.PrepareResponse(h.APISuccessCode, h.CustomerFetchSuccess)
+	custResp := dto.CustomersResponse{
+		Response:  res,
+		Total:     len(customers),
+		Customers: customers,
+	}
+	h.RespondWithJSON(c, custResp, http.StatusOK)
+}
+
+func (ch *customerHandler) UploadCustomer(c *gin.Context) {
+	dbConfig := config.ConnectDB()
+	logger := config.GetLoggerInstance()
+	file, err := c.FormFile("file")
+	if err != nil {
+		logger.Log(h.FileRetrieveFromFormDataError, err.Error(), h.FileRetrieveFromFormDataErrorCode)
+		res := httpresponse.PrepareResponse(h.FileRetrieveFromFormDataErrorCode, h.FileRetrieveFromFormDataError)
+		h.RespondWithError(c, http.StatusBadRequest, res)
+		return
+	}
+
 	if !strings.HasSuffix(file.Filename, h.XlsxFormat) {
+		logger.Log(h.FileFormateInvalidError, err.Error(), h.FileFormateInvalidErrorCode)
 		res := httpresponse.PrepareResponse(h.FileFormateInvalidErrorCode, h.FileFormateInvalidError)
 		h.RespondWithError(c, http.StatusBadRequest, res)
 		return
@@ -54,89 +65,138 @@ func (ch *customerHandler) CreateCustomer(c *gin.Context) {
 
 	customers, err := services.ParseExcel(file)
 	if err != nil {
+		logger.Log(h.ExcelFileParseError, err.Error(), h.ExcelFileParseErrorCode)
 		res := httpresponse.PrepareResponse(h.ExcelFileParseErrorCode, h.ExcelFileParseError)
-		h.RespondWithError(c, http.StatusBadRequest, res)
+		h.RespondWithError(c, http.StatusInternalServerError, res)
 		return
 	}
 
 	var wg sync.WaitGroup
-	errCh := make(chan error, len(customers)) // Channel to collect errors
+	errCh := make(chan error, len(customers))
 
 	for _, customer := range customers {
-		wg.Add(1) // Increment the wait group counter
+		wg.Add(1)
 		go func(cust models.Customer, wg *sync.WaitGroup) {
-			defer wg.Done() // Decrement the counter when the goroutine completes
-			if err := services.AddCustomer(&cust, config); err != nil {
-				errCh <- err // Send the error to the channel
+			defer wg.Done()
+			if err := services.AddCustomer(&cust, dbConfig); err != nil {
+				errCh <- err
 				return
 			}
 		}(customer, &wg)
 	}
 
-	wg.Wait()    // Wait for all goroutines to finish
-	close(errCh) // Close the error channel
+	wg.Wait()
+	close(errCh)
 
-	// Check for errors
 	if err := <-errCh; err != nil {
+		logger.Log(h.CustomerSaveError, err.Error(), h.CustomerSaveErrorCode)
 		res := httpresponse.PrepareResponse(h.CustomerSaveErrorCode, h.CustomerSaveError)
 		h.RespondWithError(c, http.StatusInternalServerError, res)
 		return
 	}
-
+	logger.Log(h.CustomerSaveSuccess, "", h.APISuccessCode)
 	res := httpresponse.PrepareResponse(h.APISuccessCode, h.CustomerSaveSuccess)
-	h.RespondWithError(c, http.StatusCreated, res)
+	h.RespondWithJSON(c, res, http.StatusCreated)
 }
 
-// EditCustomer updates a customer in MySQL and Redis
-func (ch *customerHandler) EditCustomer(c *gin.Context) {
-	config := config.ConnectDB()
+func (ch *customerHandler) UpdateCustomer(c *gin.Context) {
+	dbConfig := config.ConnectDB()
+	logger := config.GetLoggerInstance()
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid customer ID"})
+		logger.Log(h.CustomerIdInvalidError, err.Error(), h.CustomerIdInvalidErrorCode)
+		res := httpresponse.PrepareResponse(h.CustomerIdInvalidErrorCode, h.CustomerIdInvalidError)
+		h.RespondWithError(c, http.StatusBadRequest, res)
+		return
+	}
+	customer, err := services.FetchById(id, dbConfig.DB)
+	if err != nil {
+		logger.Log(h.CustomerFetchError, err.Error(), h.CustomerFetchErrorCode)
+		res := httpresponse.PrepareResponse(h.CustomerFetchErrorCode, h.CustomerFetchError)
+		h.RespondWithError(c, http.StatusBadRequest, res)
 		return
 	}
 
-	var customer models.Customer
 	if err := c.ShouldBindJSON(&customer); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid data"})
+		logger.Log(h.CustomerDataInvalidError, err.Error(), h.CustomerDataInvalidErrorCode)
+		res := httpresponse.PrepareResponse(h.CustomerDataInvalidErrorCode, h.CustomerDataInvalidError)
+		h.RespondWithError(c, http.StatusBadRequest, res)
 		return
 	}
 
-	// Update the customer in MySQL
-	err = services.UpdateCustomer(id, &customer, config)
+	customer, err = services.UpdateCustomer(id, customer, dbConfig)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update customer"})
+		logger.Log(h.CustomerUpdateError, err.Error(), h.CustomerUpdateErrorCode)
+		res := httpresponse.PrepareResponse(h.CustomerUpdateErrorCode, h.CustomerUpdateError)
+		h.RespondWithError(c, http.StatusBadRequest, res)
 		return
 	}
 
-	c.JSON(http.StatusOK, customer)
+	logger.Log(h.CustomerUpdateSuccess, "", h.APISuccessCode)
+	res := httpresponse.PrepareResponse(h.APISuccessCode, h.CustomerUpdateSuccess)
+	custResp := dto.CustomerResponse{
+		Response: res,
+		Customer: customer,
+	}
+	h.RespondWithJSON(c, custResp, http.StatusOK)
 }
 
-// EditCustomer updates a customer in MySQL and Redis
 func (ch *customerHandler) DeleteCustomer(c *gin.Context) {
-	config := config.ConnectDB()
-	id, _ := strconv.Atoi(c.Param("id"))
-	var customer models.Customer
-
-	err := services.DeleteCustomer(id, config)
+	dbConfig := config.ConnectDB()
+	logger := config.GetLoggerInstance()
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update customer"})
+		logger.Log(h.CustomerIdInvalidError, err.Error(), h.CustomerIdInvalidErrorCode)
+		res := httpresponse.PrepareResponse(h.CustomerIdInvalidErrorCode, h.CustomerIdInvalidError)
+		h.RespondWithError(c, http.StatusBadRequest, res)
 		return
 	}
-	c.JSON(http.StatusOK, customer)
+
+	customer, err := services.FetchById(id, dbConfig.DB)
+	if err != nil {
+		logger.Log(h.CustomerFetchError, err.Error(), h.CustomerFetchErrorCode)
+		res := httpresponse.PrepareResponse(h.CustomerFetchErrorCode, h.CustomerFetchError)
+		h.RespondWithError(c, http.StatusBadRequest, res)
+		return
+	}
+
+	err = services.DeleteCustomer(id, dbConfig)
+	if err != nil {
+		logger.Log(h.CustomerDeleteError, err.Error(), h.CustomerDeleteErrorCode)
+		res := httpresponse.PrepareResponse(h.CustomerDeleteErrorCode, h.CustomerDeleteError)
+		h.RespondWithError(c, http.StatusBadRequest, res)
+		return
+	}
+
+	logger.Log(h.CustomerDeleteSuccess, "", h.APISuccessCode)
+	res := httpresponse.PrepareResponse(h.APISuccessCode, h.CustomerDeleteSuccess)
+	custResp := dto.CustomerResponse{
+		Response: res,
+		Customer: customer,
+	}
+	h.RespondWithJSON(c, custResp, http.StatusOK)
 }
 
-// GetAllCacheCustomers fetches all customers from Redis or MySQL
 func (ch *customerHandler) GetAllCacheCustomers(c *gin.Context) {
-	config := config.ConnectDB()
-	db := config.DB
-	redisClient := config.Redis // Assuming you have a Redis client configured
+	dbConfig := config.ConnectDB()
+	logger := config.GetLoggerInstance()
+	db := dbConfig.DB
+	redisClient := dbConfig.Redis
 
 	customers, err := services.GetAllCustomersFromCache(db, redisClient)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch customers"})
+		logger.Log(h.CustomerFetchError, err.Error(), h.CustomerFetchErrorCode)
+		res := httpresponse.PrepareResponse(h.CustomerFetchErrorCode, h.CustomerFetchError)
+		h.RespondWithError(c, http.StatusBadRequest, res)
 		return
 	}
 
-	c.JSON(http.StatusOK, customers)
+	logger.Log(h.CustomerFetchSuccess, "", h.APISuccessCode)
+	res := httpresponse.PrepareResponse(h.APISuccessCode, h.CustomerFetchSuccess)
+	custResp := dto.CustomersResponse{
+		Response:  res,
+		Total:     len(customers),
+		Customers: customers,
+	}
+	h.RespondWithJSON(c, custResp, http.StatusOK)
 }

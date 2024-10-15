@@ -21,7 +21,6 @@ func AddCustomer(customer *models.Customer, config *config.Config) error {
 		return err
 	}
 	redis := config.Redis
-	// Cache the data in Redis
 	return CacheCustomer(customer, redis)
 }
 
@@ -33,68 +32,76 @@ func GetCustomers(db *gorm.DB) ([]models.Customer, error) {
 	return customers, nil
 }
 
-func UpdateCustomer(id int, customer *models.Customer, config *config.Config) error {
-	db := config.DB
-
-	// Update the customer in MySQL
-	if err := db.Model(&models.Customer{}).Where("id = ?", id).Updates(customer).Error; err != nil {
-		return err
+func FetchById(id int, db *gorm.DB) (models.Customer, error) {
+	var customer models.Customer
+	if err := db.First(&customer, id).Error; err != nil {
+		return customer, err
 	}
+	return customer, nil
+}
 
-	// Update the Redis cache with the updated customer data
+func UpdateCustomer(id int, post models.Customer, config *config.Config) (models.Customer, error) {
+	db := config.DB
+	customer := models.Customer{
+		ID:        post.ID,
+		FirstName: post.FirstName,
+		LastName:  post.LastName,
+		Company:   post.Company,
+		City:      post.City,
+		Postal:    post.Postal,
+		Phone:     post.Phone,
+		Email:     post.Email,
+		Address:   post.Address,
+		Web:       post.Web,
+		County:    post.County,
+		UpdatedAt: time.Now(),
+	}
+	if err := db.Model(&models.Customer{}).Where("id = ?", id).Updates(&customer).Error; err != nil {
+		return models.Customer{}, err
+	}
 	redis := config.Redis
-	return CacheCustomer(customer, redis) // Update Redis cache
+	return customer, CacheCustomer(&customer, redis)
 }
 
 func DeleteCustomer(id int, config *config.Config) error {
 	db := config.DB
 	if err := db.Delete(&models.Customer{}, id).Error; err != nil {
-		fmt.Println("Error deleting customer from database:", err)
 		return err
 	}
 
-	// Step 2: Remove customer data from Redis cache
 	redisKey := fmt.Sprintf("customer:%d", id)
 	redis := config.Redis
 	if err := redis.Del(context.Background(), redisKey).Err(); err != nil {
-		fmt.Println("Error deleting customer from Redis cache:", err)
 		return err
 	}
 
-	fmt.Printf("Customer with ID %d deleted successfully.\n", id)
 	return nil
 }
 
 func GetAllCustomersFromCache(db *gorm.DB, redisClient *redis.Client) ([]models.Customer, error) {
 	var customers []models.Customer
 
-	// Retrieve all customer IDs from MySQL
 	var customerIDs []int
 	if err := db.Model(&models.Customer{}).Pluck("id", &customerIDs).Error; err != nil {
-		return nil, err // Return error if not found in MySQL
+		return nil, err
 	}
 
-	// Check each customer in Redis
 	for _, id := range customerIDs {
 		customerKey := "customer:" + strconv.Itoa(id)
 		customerJSON, err := redisClient.Get(ctx, customerKey).Result()
 		if err == redis.Nil {
-			// If customer not found in Redis, fetch from MySQL
 			var customer models.Customer
 			if err := db.First(&customer, id).Error; err == nil {
-				// Cache the customer in Redis
 				customerJSON, _ := json.Marshal(customer)
 				redisClient.Set(ctx, customerKey, customerJSON, 5*time.Minute)
-				customers = append(customers, customer) // Add to the results
+				customers = append(customers, customer)
 			}
 		} else if err == nil {
-			// If customer found in Redis, unmarshal and add to results
 			var customer models.Customer
 			if err := json.Unmarshal([]byte(customerJSON), &customer); err == nil {
 				customers = append(customers, customer)
 			}
 		}
 	}
-
 	return customers, nil
 }
