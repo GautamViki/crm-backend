@@ -32,3 +32,11 @@ message: Save customers successfully. code: 0, at 2024-10-15 14:29:57.0720955 +0
 message: Save customers successfully. code: 0, at 2024-10-15 14:29:59.5401283 +0530 IST m=+29.916424801
 message: Save customers successfully. code: 0, at 2024-10-15 14:30:37.314732 +0530 IST m=+67.691028501
 message: Save customers successfully. code: 0, at 2024-10-15 14:30:45.9212512 +0530 IST m=+76.297547701
+message: Failed to parse Excel file.Phone is invalid. code: 3000, at 2024-10-15 14:49:49.8258027 +0530 IST m=+35.713114901
+message: Error occurred while saving customer.Error setting customer data in Redis. code: 2000, at 2024-10-15 14:51:34.250226 +0530 IST m=+53.318273401
+message: Error occurred while saving customer.Error setting customer data in Redis. code: 2000, at 2024-10-15 14:52:53.3732789 +0530 IST m=+57.893103701
+message: No file was provided in the request. Please upload a file.request Content-Type isn't multipart/form-data code: 1000, at 2024-10-15 15:06:32.1815611 +0530 IST m=+10.108697501
+message: Save customers successfully. code: 0, at 2024-10-15 15:07:20.3455425 +0530 IST m=+58.272678901
+message: Save customers successfully. code: 0, at 2024-10-15 15:07:24.2892853 +0530 IST m=+62.216421701
+message: Save customers successfully. code: 0, at 2024-10-15 15:07:27.2687232 +0530 IST m=+65.195859601
+message: Save customers successfully. code: 0, at 2024-10-15 15:07:30.53035 +0530 IST m=+68.457486401

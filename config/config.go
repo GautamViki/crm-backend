@@ -23,7 +23,6 @@ func ConnectDB() *Config {
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
-	// Get environment variables
 	dbUser := os.Getenv("DB_USER")
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbName := os.Getenv("DB_NAME")
@@ -47,10 +46,12 @@ func ConnectDB() *Config {
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetConnMaxLifetime(time.Minute * 5)
 
+	// Redis connection
 	redis := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%s", os.Getenv("REDIS_HOST"), os.Getenv("REDIS_PORT")),
-		Password: "",
-		DB:       0,
+		Addr:        fmt.Sprintf("%s:%s", os.Getenv("REDIS_HOST"), os.Getenv("REDIS_PORT")),
+		Password:    "",
+		DB:          0,
+		DialTimeout: 10 * time.Second,
 	})
 	pong, err := redis.Ping(context.Background()).Result()
 	fmt.Println(pong, err)
