@@ -51,11 +51,11 @@ This project is a Golang-based system that imports data from an Excel file, stor
 ## Setup Instructions
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/yourrepository.git
+   git clone https://github.com/GautamViki/crm-backend.git
    ```
 2. Install dependencies:
    ```bash
-   go mod download
+   go mod tidy
    ```
 3. Configure the database and Redis connection in `config.yaml`.
 4. Start the server:
