@@ -57,7 +57,7 @@ func (ch *customerHandler) UploadCustomer(c *gin.Context) {
 	}
 
 	if !strings.HasSuffix(file.Filename, h.XlsxFormat) {
-		logger.Log(h.FileFormateInvalidError, err.Error(), h.FileFormateInvalidErrorCode)
+		logger.Log(h.FileFormateInvalidError, "", h.FileFormateInvalidErrorCode)
 		res := httpresponse.PrepareResponse(h.FileFormateInvalidErrorCode, h.FileFormateInvalidError)
 		h.RespondWithError(c, http.StatusBadRequest, res)
 		return

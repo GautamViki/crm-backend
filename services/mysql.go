@@ -54,6 +54,7 @@ func UpdateCustomer(id int, post models.Customer, config *config.Config) (models
 		Address:   post.Address,
 		Web:       post.Web,
 		County:    post.County,
+		CreatedAt: post.CreatedAt,
 		UpdatedAt: time.Now(),
 	}
 	if err := db.Model(&models.Customer{}).Where("id = ?", id).Updates(&customer).Error; err != nil {
@@ -85,7 +86,6 @@ func GetAllCustomersFromCache(db *gorm.DB, redisClient *redis.Client) ([]models.
 	if err := db.Model(&models.Customer{}).Pluck("id", &customerIDs).Error; err != nil {
 		return nil, err
 	}
-
 	for _, id := range customerIDs {
 		customerKey := "customer:" + strconv.Itoa(id)
 		customerJSON, err := redisClient.Get(ctx, customerKey).Result()
