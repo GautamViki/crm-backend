@@ -5,7 +5,6 @@ import (
 	"crm-backend/config"
 	"crm-backend/models"
 	"encoding/json"
-	"errors"
 	"strconv"
 
 	"time"
@@ -16,13 +15,13 @@ import (
 func CacheCustomer(customer *models.Customer, redis *redis.Client) error {
 	data, err := json.Marshal(customer)
 	if err != nil {
-		return errors.New("Error marshaling customer data.")
+		return err
 	}
 
 	customerKey := "customer:" + strconv.Itoa(int(customer.ID))
 	err = redis.Set(context.Background(), customerKey, data, 5*time.Minute).Err()
 	if err != nil {
-		return errors.New("Error setting customer data in Redis.")
+		return err
 	}
 	return nil
 }

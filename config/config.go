@@ -51,8 +51,11 @@ func ConnectDB() *Config {
 		Addr:        fmt.Sprintf("%s:%s", os.Getenv("REDIS_HOST"), os.Getenv("REDIS_PORT")),
 		Password:    "",
 		DB:          0,
+		PoolSize:    10,
+		PoolTimeout: 5 * time.Second,
 		DialTimeout: 10 * time.Second,
 	})
+
 	pong, err := redis.Ping(context.Background()).Result()
 	fmt.Println(pong, err)
 	return &Config{
