@@ -45,9 +45,9 @@ func ParseExcel(file *multipart.FileHeader) ([]models.Customer, error) {
 		if !h.ValidateEmail(row[8]) {
 			return []models.Customer{}, errors.New(h.EmailInvalidError)
 		}
-		if !h.ValidatePhoneNumberWithCountry(row[7]) {
-			return []models.Customer{}, errors.New(h.PhoneInvalidError)
-		}
+		// if !h.ValidatePhoneNumberWithCountry(row[7]) {
+		// 	return []models.Customer{}, errors.New(h.PhoneInvalidError)
+		// }
 		customers = append(customers, models.Customer{
 			FirstName: row[0], LastName: row[1], Company: row[2],
 			Address: row[3], City: row[4], County: row[5],

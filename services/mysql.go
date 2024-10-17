@@ -34,7 +34,7 @@ func GetCustomers(db *gorm.DB) ([]models.Customer, error) {
 
 func FetchById(id int, db *gorm.DB) (models.Customer, error) {
 	var customer models.Customer
-	if err := db.First(&customer, id).Error; err != nil {
+	if err := db.Where("id = ?", id).First(&customer).Error; err != nil {
 		return customer, err
 	}
 	return customer, nil
